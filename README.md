@@ -1,8 +1,10 @@
 # POC — Projektkoordination (Click-Dummy)
 
 Statischer Click-Dummy (Proof-of-Concept) des Projektkoordinations-Prozesses von
-**Zeichen gegen Mobbing** — aus Sicht der Projektkoordination (PK), Hauptpfad über
-18 Screens (0–17) mit Verzweigungen.
+**Zeichen gegen Mobbing**. Start ist eine Rollenauswahl; jede der vier Rollen
+(Projektkoordination, Schule, Social Visionary, Klassenleitung) hat ihren eigenen
+bedienbaren Klickpfad. Die PK-Perspektive ist der Hauptpfad über 18 Screens (0–17)
+mit Verzweigungen.
 
 - **Zweck:** den Prozessfluss durchklickbar validieren, kein Produktivsystem.
 - **Technik:** reines HTML/CSS/JS, kein Build, kein Backend, keine Abhängigkeiten.

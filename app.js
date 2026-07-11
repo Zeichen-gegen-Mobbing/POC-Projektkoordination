@@ -1,10 +1,11 @@
 "use strict";
 
-/* Click-Dummy Projektkoordination — Hauptpfad aus Sicht der PK.
-   Jeder Screen rendert echtes App-UI (Tabelle, Formular, Dokument-Vorschau,
-   Aufgaben-Karten, Statistik-Kacheln) statt Prosa. Datengetrieben aus SCREENS;
-   render()/history stützen Weiter/Zurück/Neustart. Eingaben sind Attrappe —
-   keine Validierung, keine Persistenz (statischer PoC). */
+/* Click-Dummy Projektkoordination — vier Rollen-Perspektiven.
+   Start: Rollenauswahl (home). Jede Rolle hat ihren eigenen Klickpfad mit
+   echten, bedienbaren Screens. PK-Screens (0–17) unverändert; Formulare, die
+   ohnehin einer anderen Rolle gehören (Angebotsdetails, Angebot, Termine,
+   Vertrag/Klassenplanung), werden über gemeinsame Body-Konstanten wiederverwendet.
+   render()/history stützen Weiter/Zurück/Neustart. Eingaben sind Attrappe. */
 
 /* ---- Render-Helfer ------------------------------------------------------ */
 
@@ -29,6 +30,10 @@ const task = (title, status, kind, checked) =>
   `<div class="task"><label class="task-check"><input type="checkbox" ${checked ? "checked" : ""}>` +
   `<span>${title}</span></label>${pill(status, kind)}</div>`;
 
+const taskDo = (title, controlHtml, checked) =>
+  `<div class="task"><label class="task-check"><input type="checkbox" ${checked ? "checked" : ""}>` +
+  `<span>${title}</span></label>${controlHtml}</div>`;
+
 const tile = (label, value) =>
   `<div class="tile"><div class="tile-val">${value}</div><div class="tile-label">${label}</div></div>`;
 
@@ -36,8 +41,6 @@ const emailCard = (from, to, subject, body) =>
   `<div class="email"><div class="email-head">` +
   `<div><span class="e-k">Von</span> ${from}</div><div><span class="e-k">An</span> ${to}</div>` +
   `<div class="e-subj">${subject}</div></div><div class="email-body">${body}</div></div>`;
-
-/* ---- Screens ------------------------------------------------------------ */
 
 const N = {
   frage:      (t) => ({ tag: "Frage",      cls: "tag-frage",      t }),
@@ -48,7 +51,84 @@ const N = {
   besprechen: (t) => ({ tag: "Besprechen", cls: "tag-besprechen", t }),
 };
 
+/* ---- Wiederverwendbare Bodies (von mehreren Rollen genutzt) ------------- */
+
+const bodyAngebotForm =
+  `<p class="lead">Formular zur Erfassung der Angebotsdetails.</p>` +
+  section("Unterricht",
+    field("Unterrichtszeiten", { value: "08:00–13:15" }) +
+    field("Hybrid möglich?", { options: ["Nein", "Ja"] })) +
+  section("Angaben zur Schule",
+    field("Straße + Hausnr.", { ph: "z. B. Lindenweg 4" }) +
+    field("Name der Schulleitung", { ph: "Vor- und Nachname" }) +
+    field("Schulform", { options: ["Grundschule", "Stadtteilschule", "Gymnasium", "Förderschule", "Berufsschule"] }) +
+    field("Rechnungsadresse abweichend?", { options: ["Nein", "Ja"] })) +
+  section("Rechnungs- & Trägerangaben",
+    field("Rechnungsadresse", { textarea: true, ph: "Nur falls abweichend…" }) +
+    field("Anschrift des Schulträgers", { textarea: true, ph: "Straße, PLZ, Ort" }), 1);
+
+const bodyAngebotQuote =
+  `<div class="doc">
+    <div class="doc-head"><strong>Zeichen gegen Mobbing e.V.</strong>
+      <span>Angebot Nr. 2026-0142 · 14.07.2026</span></div>
+    <div class="doc-to">An: GS Lindenhof, Petra Meyer</div>
+    <table class="doc-tbl">
+      <thead><tr><th>Position</th><th class="r">Menge</th><th class="r">Einzel</th><th class="r">Summe</th></tr></thead>
+      <tbody>
+        <tr><td>Workshop-Durchführung (2 Klassen)</td><td class="r">2</td><td class="r">980,00 €</td><td class="r">1.960,00 €</td></tr>
+        <tr><td>Situationserfassung</td><td class="r">2</td><td class="r">180,00 €</td><td class="r">360,00 €</td></tr>
+        <tr><td>Material &amp; Vorbereitung</td><td class="r">1</td><td class="r">160,00 €</td><td class="r">160,00 €</td></tr>
+      </tbody>
+    </table>
+    <div class="doc-total">Gesamt: <strong>2.480,00 €</strong></div>
+  </div>`;
+
+const bodyTermine =
+  `<p class="lead">Vorgeschlagene Termine — verbindlich bestätigen.</p>
+   <div class="opts">
+     <label class="opt"><input type="checkbox" checked> Di, 10.11.2026 · 08:00–13:00 · Klasse 7a</label>
+     <label class="opt"><input type="checkbox" checked> Mi, 11.11.2026 · 08:00–13:00 · Klasse 7b</label>
+     <label class="opt"><input type="checkbox"> Do, 12.11.2026 · Ausweichtermin</label>
+   </div>` +
+  section("Ergebnis", ro("Status", pill("Verbindlich bestätigt", "ok")), 1);
+
+const bodyVertragKlasse =
+  `<div class="parallel-note">Vertrag erhalten · Klassenplanung ausfüllen:</div>
+   <div class="two-col">
+     <div class="doc doc-sm">
+       <div class="doc-head"><strong>Dienstleistungsvertrag</strong>${pill("Erhalten", "ok")}</div>
+       <ul class="doc-list">
+         <li>Vertragsdokument</li>
+         <li>Hinweis Kinderschutzkonzept</li>
+         <li>Erklärung für Lehrkräfte</li>
+       </ul>
+     </div>
+     <div class="form-col">
+       ${section("Formular Klassenplanung",
+         field("Klassenbezeichnung", { value: "7a" }) +
+         field("Klassenleitung – Name", { ph: "Vor- und Nachname" }) +
+         field("Klassenleitung – E-Mail", { type: "email", ph: "name@schule.de" }), 1)}
+     </div>
+   </div>`;
+
+/* ---- Screens ------------------------------------------------------------ */
+
 const SCREENS = {
+  home: {
+    role: "home", phase: "Perspektive wählen", title: "Ich bin …",
+    body:
+      `<p class="lead">Wählen Sie Ihre Rolle im Prozess. Jede Perspektive zeigt Ihre eigenen,
+        bedienbaren Screens.</p>`,
+    actions: [
+      { label: "Projektkoordination", to: 0, kind: "primary" },
+      { label: "Schule", to: "s_anfrage", kind: "branch" },
+      { label: "Social Visionary", to: "sv_matching", kind: "branch" },
+      { label: "Klassenleitung", to: "kl_mail", kind: "branch" },
+    ],
+  },
+
+  /* ===== Projektkoordination (unverändert) ============================== */
+
   0: {
     step: 0, phase: "Einstieg", title: "Dashboard / Projektübersicht",
     body: `
@@ -138,19 +218,7 @@ const SCREENS = {
 
   4: {
     step: 4, phase: "B — Angebot", title: "Angebotsdetails-Formular",
-    body:
-      `<p class="lead">Formular für die Schule zur Erfassung der Angebotsdetails.</p>` +
-      section("Unterricht",
-        field("Unterrichtszeiten", { value: "08:00–13:15" }) +
-        field("Hybrid möglich?", { options: ["Nein", "Ja"] })) +
-      section("Angaben zur Schule",
-        field("Straße + Hausnr.", { ph: "z. B. Lindenweg 4" }) +
-        field("Name der Schulleitung", { ph: "Vor- und Nachname" }) +
-        field("Schulform", { options: ["Grundschule", "Stadtteilschule", "Gymnasium", "Förderschule", "Berufsschule"] }) +
-        field("Rechnungsadresse abweichend?", { options: ["Nein", "Ja"] })) +
-      section("Rechnungs- & Trägerangaben",
-        field("Rechnungsadresse", { textarea: true, ph: "Nur falls abweichend…" }) +
-        field("Anschrift des Schulträgers", { textarea: true, ph: "Straße, PLZ, Ort" }), 1),
+    body: bodyAngebotForm,
     actions: [
       { label: "Details erhalten", to: 5, kind: "branch" },
       { label: "Angebot abgelehnt", to: "ende", kind: "branch" },
@@ -164,21 +232,7 @@ const SCREENS = {
 
   5: {
     step: 5, phase: "B — Angebot", title: "Angebot erstellen & versenden",
-    body:
-      `<div class="doc">
-        <div class="doc-head"><strong>Zeichen gegen Mobbing e.V.</strong>
-          <span>Angebot Nr. 2026-0142 · 14.07.2026</span></div>
-        <div class="doc-to">An: GS Lindenhof, Petra Meyer</div>
-        <table class="doc-tbl">
-          <thead><tr><th>Position</th><th class="r">Menge</th><th class="r">Einzel</th><th class="r">Summe</th></tr></thead>
-          <tbody>
-            <tr><td>Workshop-Durchführung (2 Klassen)</td><td class="r">2</td><td class="r">980,00 €</td><td class="r">1.960,00 €</td></tr>
-            <tr><td>Situationserfassung</td><td class="r">2</td><td class="r">180,00 €</td><td class="r">360,00 €</td></tr>
-            <tr><td>Material &amp; Vorbereitung</td><td class="r">1</td><td class="r">160,00 €</td><td class="r">160,00 €</td></tr>
-          </tbody>
-        </table>
-        <div class="doc-total">Gesamt: <strong>2.480,00 €</strong></div>
-      </div>`,
+    body: bodyAngebotQuote,
     actions: [{ label: "Angebot versenden → Weiter", to: 6, kind: "primary" }],
     notes: [
       N.vorschlag("Hier einen KVA versenden statt Angebot."),
@@ -249,37 +303,13 @@ const SCREENS = {
 
   9: {
     step: 9, phase: "C — Terminfindung & SoVi-Matching", title: "Termine bestätigen",
-    body:
-      `<p class="lead">Vorgeschlagene Termine an die Schule — die Schule bestätigt verbindlich.</p>
-       <div class="opts">
-         <label class="opt"><input type="checkbox" checked> Di, 10.11.2026 · 08:00–13:00 · Klasse 7a</label>
-         <label class="opt"><input type="checkbox" checked> Mi, 11.11.2026 · 08:00–13:00 · Klasse 7b</label>
-         <label class="opt"><input type="checkbox"> Do, 12.11.2026 · Ausweichtermin</label>
-       </div>` +
-      section("Ergebnis", ro("Status", pill("Verbindlich bestätigt", "ok")), 1),
+    body: bodyTermine,
     actions: [{ label: "Weiter", to: 10, kind: "primary" }],
   },
 
   10: {
     step: 10, phase: "D — Vertrag & Klassenplanung", title: "Vertrag & Klassenplanung",
-    body:
-      `<div class="parallel-note">Zwei Aktionen laufen parallel:</div>
-       <div class="two-col">
-         <div class="doc doc-sm">
-           <div class="doc-head"><strong>Dienstleistungsvertrag</strong>${pill("Versendet", "ok")}</div>
-           <ul class="doc-list">
-             <li>Vertragsdokument</li>
-             <li>Hinweis Kinderschutzkonzept</li>
-             <li>Erklärung für Lehrkräfte</li>
-           </ul>
-         </div>
-         <div class="form-col">
-           ${section("Formular Klassenplanung (Schule)",
-             field("Klassenbezeichnung", { value: "7a" }) +
-             field("Klassenleitung – Name", { ph: "Vor- und Nachname" }) +
-             field("Klassenleitung – E-Mail", { type: "email", ph: "name@schule.de" }), 1)}
-         </div>
-       </div>`,
+    body: bodyVertragKlasse,
     actions: [{ label: "Weiter", to: 11, kind: "primary" }],
     notes: [
       N.frage("Reihenfolge Vertrag / Klassenplanung — oder erst hier?"),
@@ -411,12 +441,231 @@ const SCREENS = {
        </div>`,
     terminal: "ende",
   },
+
+  /* ===== Schule ========================================================= */
+
+  s_anfrage: {
+    role: "schule", phase: "Schule · Anfrage", title: "Anfrage über die Website stellen",
+    body:
+      `<p class="lead">Füllen Sie das Anfrageformular aus. Felder mit * sind Pflicht.</p>` +
+      section("Stammdaten",
+        field("Name der Schule *", { ph: "z. B. GS Lindenhof" }) +
+        field("PLZ *", { ph: "21077" }) + field("Ort *", { ph: "Hamburg" })) +
+      section("Ansprechperson",
+        field("Name *", { ph: "Vor- und Nachname" }) + field("Position", { ph: "z. B. Klassenleitung" }) +
+        field("E-Mail *", { type: "email", ph: "name@schule.de" }) + field("Telefon", { type: "tel", ph: "040 …" })) +
+      section("Projektplanung",
+        field("Anzahl Klassen *", { type: "number", ph: "2" }) +
+        field("Jahrgangsstufen *", { ph: "z. B. 7" }) +
+        field("Termin", { options: ["Flexibel", "Wunschtermine"] }) +
+        field("Finanzierung genehmigt", { options: ["Nein", "Ja"] })) +
+      section("Weiteres",
+        field("Wunschtermine", { ph: "z. B. KW 46–48 / 2026" }) +
+        field("Bemerkungen", { textarea: true, ph: "Optional …" }), 1),
+    actions: [{ label: "Anfrage absenden → Weiter", to: "s_erstgespraech", kind: "primary" }],
+    notes: [
+      N.frage("SchulAPI zur Vereinfachung des Anfrageformulars → Adresse Schulträger erforderlich?"),
+      N.idee("Jg. 1–2 schon rausnehmen? → Tooltip"),
+      N.idee("Straße schon hier abfragen?"),
+    ],
+  },
+
+  s_erstgespraech: {
+    role: "schule", phase: "Schule · Erstgespräch", title: "Erstgespräch buchen",
+    body:
+      `<p class="lead">Wählen Sie einen freien Termin für Ihr Erstgespräch (Video-Call, ca. 30 Min.):</p>
+       <div class="opts">
+         <label class="opt"><input type="radio" name="slot" checked> Mo, 14.07.2026 · 10:00 Uhr</label>
+         <label class="opt"><input type="radio" name="slot"> Di, 15.07.2026 · 14:00 Uhr</label>
+         <label class="opt"><input type="radio" name="slot"> Do, 17.07.2026 · 09:30 Uhr</label>
+       </div>`,
+    actions: [{ label: "Termin buchen → Weiter", to: "s_angebotform", kind: "primary" }],
+  },
+
+  s_angebotform: {
+    role: "schule", phase: "Schule · Angebot", title: "Angebotsdetails ausfüllen",
+    body: bodyAngebotForm,
+    actions: [{ label: "Formular absenden → Weiter", to: "s_angebotpruef", kind: "primary" }],
+  },
+
+  s_angebotpruef: {
+    role: "schule", phase: "Schule · Angebot", title: "Angebot prüfen und unterschreiben",
+    body:
+      bodyAngebotQuote +
+      `<label class="opt" style="margin-top:12px"><input type="checkbox"> Ich habe das Angebot geprüft und stimme zu.</label>`,
+    actions: [{ label: "✍ Prüfen & Unterschreiben → Weiter", to: "s_termine", kind: "primary" }],
+  },
+
+  s_termine: {
+    role: "schule", phase: "Schule · Terminfindung", title: "Termine verbindlich bestätigen",
+    body: bodyTermine,
+    actions: [{ label: "Termine bestätigen → Weiter", to: "s_vertrag", kind: "primary" }],
+  },
+
+  s_vertrag: {
+    role: "schule", phase: "Schule · Vertrag", title: "Vertrag erhalten & Klassenplanung",
+    body: bodyVertragKlasse,
+    actions: [{ label: "Klassenplanung absenden → Fertig", to: "home", kind: "primary" }],
+  },
+
+  /* ===== Social Visionary =============================================== */
+
+  sv_matching: {
+    role: "sovi", phase: "SoVi · Matching", title: "Projektanfrage — zusagen oder absagen",
+    body:
+      `<div class="meeting">
+         <div class="meeting-when"><span class="big">GS Lindenhof</span> · Hamburg</div>
+         <div class="meeting-row">Workshop: 10.–11.11.2026 · 2 Klassen (Jg. 7)</div>
+         <div class="meeting-row">Angefragt über: Persönliche Ansprache (Zielregion Hamburg)</div>
+       </div>
+       <p class="lead">Möchten Sie diesen Workshop übernehmen?</p>`,
+    actions: [
+      { label: "✓ Zusagen", to: "sv_situ", kind: "primary" },
+      { label: "✗ Absagen", to: "home", kind: "branch" },
+    ],
+  },
+
+  sv_situ: {
+    role: "sovi", phase: "SoVi · Situationserfassung", title: "Terminierung Situationserfassung übernehmen",
+    body:
+      `<p class="lead">Für Sie ist <strong>kein Buchungstool</strong> hinterlegt — bitte stimmen Sie
+        den Termin für die Situationserfassung direkt mit der Klassenleitung ab.</p>` +
+      section("Termin vorschlagen",
+        field("Datum", { type: "date" }) + field("Uhrzeit", { type: "time" }) +
+        field("Format", { options: ["Vor Ort", "Video-Call (Zoom)"] }) +
+        field("Kontakt Klassenleitung", { value: "kl-7a@gs-lindenhof.de" })),
+    actions: [{ label: "Termin an Klassenleitung senden → Weiter", to: "sv_umfrage", kind: "primary" }],
+    notes: [
+      N.sovi("Kapazitätenliste → SoVis bekommen Terminbuchungstool. Mit Neeto prüfen."),
+      N.besprechen("Unschön, dass manche SoVis Calendly haben und manche nicht (Beispiel OSG Hildesheim)."),
+    ],
+  },
+
+  sv_umfrage: {
+    role: "sovi", phase: "SoVi · Umfrage", title: "Umfrage auswerten",
+    body:
+      section("Umfrageergebnisse der Klasse",
+        ro("Rücklaufquote", "87 % (26 / 30)") + ro("Zeitraum", "vor dem Workshop")) +
+      section("Auswertung",
+        field("Beobachtungen / Auffälligkeiten", { textarea: true, rows: 3, ph: "Kurze Auswertung …" }) +
+        field("Empfehlung für den Workshop-Fokus", { textarea: true, rows: 2, ph: "Optional …" }), 1),
+    actions: [{ label: "Auswertung absenden → Weiter", to: "sv_reflexion", kind: "primary" }],
+  },
+
+  sv_reflexion: {
+    role: "sovi", phase: "SoVi · Nachbereitung", title: "Reflexionsfragebogen ausfüllen",
+    body:
+      section("Reflexion zum Workshop",
+        field("Wie ist der Workshop verlaufen?", { textarea: true, rows: 3, ph: "…" }) +
+        field("Gesamtbewertung", { options: ["1 – sehr gut", "2", "3", "4", "5"] }) +
+        field("Verbesserungsvorschläge", { textarea: true, rows: 2, ph: "Optional …" }), 1),
+    actions: [{ label: "Fragebogen absenden → Weiter", to: "sv_antrag", kind: "primary" }],
+  },
+
+  sv_antrag: {
+    role: "sovi", phase: "SoVi · Abrechnung", title: "Antrag stellen (Reisekosten & Auslagen)",
+    body:
+      section("Antragsdaten",
+        field("Gefahrene KM", { type: "number", value: "64" }) +
+        field("Reisekosten (€)", { type: "number", ph: "0,00" }) +
+        field("Unterkunft (€)", { type: "number", ph: "0,00" }) +
+        field("Verpflegung (€)", { type: "number", ph: "0,00" })) +
+      section("Sonstiges",
+        field("Beleg / Anmerkung", { textarea: true, ph: "Belege bitte anhängen …" }), 1),
+    actions: [{ label: "Antrag einreichen → Fertig", to: "home", kind: "primary" }],
+  },
+
+  /* ===== Klassenleitung ================================================= */
+
+  kl_mail: {
+    role: "kl", phase: "Klassenleitung · Projektstart", title: "Projektstart-Mail erhalten",
+    body:
+      emailCard("koordination@zeichen-gegen-mobbing.de", "Sie (Klassenleitung 7a)",
+        "Start des Projekts — Ihre Aufgaben",
+        `<p>Guten Tag,<br>Ihr Anti-Mobbing-Projekt startet. Über den Link erhalten Sie:</p>
+         <ul class="doc-list">
+           <li>Einverständniserklärungen für Eltern &amp; Erziehungsberechtigte</li>
+           <li>Erklärung für Lehrkräfte</li>
+           <li>Test-Umfrage &amp; Umfragelink Ihrer Klasse</li>
+         </ul>
+         <p><a class="fake-link">→ Aufgaben & Formulare öffnen</a></p>`),
+    actions: [{ label: "Aufgaben öffnen → Weiter", to: "kl_aufgaben", kind: "primary" }],
+  },
+
+  kl_aufgaben: {
+    role: "kl", phase: "Klassenleitung · Aufgaben", title: "Meine Aufgaben (parallel)",
+    body:
+      `<p class="lead">Ihre vier Aufgaben — in beliebiger Reihenfolge zu erledigen:</p>
+       <div class="tasks">
+         ${taskDo("Einverständniserklärungen der Eltern einholen",
+           `<button class="btn-mini" type="button">Hochladen</button>`, false)}
+         ${taskDo("Erklärung für Lehrkräfte unterschreiben",
+           `<button class="btn-mini" type="button">✍ Unterschreiben</button>`, false)}
+         ${taskDo("Umfrage planen und durchführen",
+           `<button class="btn-mini" type="button">Umfrage starten</button>`, false)}
+         ${taskDo("Situationserfassung buchen",
+           `<button class="btn-mini" type="button">Termin buchen</button>`, false)}
+       </div>`,
+    actions: [{ label: "Weiter", to: "kl_situ", kind: "primary" }],
+  },
+
+  kl_situ: {
+    role: "kl", phase: "Klassenleitung · Situationserfassung", title: "Situationserfassung durchführen",
+    body:
+      `<div class="meeting">
+         <div class="meeting-when"><span class="big">05.11.2026</span> · 08:00 Uhr · Klasse 7a</div>
+         <div class="meeting-row">Format: Vor Ort mit dem/der Social Visionary</div>
+       </div>
+       <div class="tasks">
+         ${taskDo("Situationserfassung mit der Klasse durchführen",
+           `<span class="pill pill-wartet">Geplant</span>`, false)}
+       </div>`,
+    actions: [{ label: "Als durchgeführt markieren → Weiter", to: "kl_elternabend", kind: "primary" }],
+  },
+
+  kl_elternabend: {
+    role: "kl", phase: "Klassenleitung · Elternabend", title: "Einladung Elternabend erhalten",
+    body:
+      emailCard("koordination@zeichen-gegen-mobbing.de", "Sie (Klassenleitung 7a)",
+        "Einladung zum Elternabend — bitte an die Eltern weiterleiten",
+        `<p>Anbei die Einladung zum gemeinsamen Elternabend am <strong>09.11.2026</strong>.
+          Bitte leiten Sie diese <strong>zur Weiterverteilung an die Eltern</strong> Ihrer Klasse weiter.</p>
+         <p><a class="fake-link">📎 Einladung_Elternabend.pdf</a></p>`),
+    actions: [{ label: "📧 An Eltern weiterleiten → Weiter", to: "kl_ergebnis", kind: "primary" }],
+  },
+
+  kl_ergebnis: {
+    role: "kl", phase: "Klassenleitung · Abschluss", title: "Ergebnisse einsehen",
+    body:
+      `<div class="tracker"><div class="tk done">✓ Vergleichsumfrage nach 10 Wochen abgeschlossen</div></div>
+       <h2 class="fs-title">Ergebnisse Ihrer Klasse</h2>
+       <div class="tiles">
+         ${tile("Vorher – Belastung", "hoch")}
+         ${tile("Nachher – Belastung", "gering")}
+         ${tile("Teilnahme Umfrage", "26 / 30")}
+         ${tile("Klassenklima (1–5)", "4,2")}
+       </div>`,
+    actions: [{ label: "Fertig → zur Rollenauswahl", to: "home", kind: "primary" }],
+  },
+};
+
+/* ---- Rollen-Flows (für Fortschrittsanzeige) ----------------------------- */
+
+const FLOWS = {
+  pk: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17],
+  schule: ["s_anfrage", "s_erstgespraech", "s_angebotform", "s_angebotpruef", "s_termine", "s_vertrag"],
+  sovi: ["sv_matching", "sv_situ", "sv_umfrage", "sv_reflexion", "sv_antrag"],
+  kl: ["kl_mail", "kl_aufgaben", "kl_situ", "kl_elternabend", "kl_ergebnis"],
+};
+
+const ROLE_LABEL = {
+  home: "Rollenauswahl", pk: "Projektkoordination", schule: "Schule",
+  sovi: "Social Visionary", kl: "Klassenleitung",
 };
 
 /* ---- Renderer ----------------------------------------------------------- */
 
-const TOTAL = 18; // Screens 0–17
-let currentId = 0;
+let currentId = "home";
 const history = [];
 
 const stage = document.getElementById("stage");
@@ -428,11 +677,14 @@ function render(id) {
   const s = SCREENS[id];
   if (!s) return;
   currentId = id;
+  const role = s.role || "pk";
 
   const terminalCls = s.terminal ? ` ${s.terminal}` : "";
-  const badge = s.step === null
-    ? `<span class="screen-no terminal">Ende</span>`
-    : `<span class="screen-no${terminalCls}">Screen ${id}</span>`;
+  let badge;
+  if (id === "home") badge = "";
+  else if (s.step === null) badge = `<span class="screen-no terminal">Ende</span>`;
+  else if (typeof id === "number") badge = `<span class="screen-no${terminalCls}">Screen ${id}</span>`;
+  else badge = "";
 
   let html = `<article class="card">
     <div class="phase">${s.phase}</div>
@@ -465,9 +717,15 @@ function render(id) {
 
   stage.innerHTML = html;
 
-  progressEl.textContent = s.step === null
-    ? "Prozess beendet"
-    : `Schritt ${s.step} von ${TOTAL - 1}` + (id === "7a" ? " · Zwischenschritt" : "");
+  // Fortschrittsanzeige
+  const flow = FLOWS[role];
+  let pos;
+  if (id === "home") pos = "Rollenauswahl";
+  else if (s.step === null) pos = `${ROLE_LABEL[role]} · Prozess beendet`;
+  else if (flow && flow.indexOf(id) >= 0) pos = `${ROLE_LABEL[role]} · Schritt ${flow.indexOf(id) + 1} von ${flow.length}`;
+  else if (id === "7a") pos = `${ROLE_LABEL[role]} · Zwischenschritt`;
+  else pos = ROLE_LABEL[role];
+  progressEl.textContent = pos;
 
   stage.querySelectorAll("[data-to]").forEach((btn) => {
     btn.addEventListener("click", () => {
@@ -484,8 +742,8 @@ function render(id) {
 
 document.getElementById("restart").addEventListener("click", () => {
   history.length = 0;
-  render(0);
+  render("home");
   window.scrollTo(0, 0);
 });
 
-render(0);
+render("home");
