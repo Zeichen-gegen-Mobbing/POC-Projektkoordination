@@ -1,9 +1,43 @@
 "use strict";
 
 /* Click-Dummy Projektkoordination — Hauptpfad aus Sicht der PK.
-   Alle 18 Screens (0–17) plus Zwischenschritt 7a und zwei Endzustände
-   ("ende" = Abbruch, "abschluss" = regulärer Prozessabschluss nach Screen 17)
-   liegen data-driven in SCREENS. render() zeigt currentId, history stützt Zurück. */
+   Jeder Screen rendert echtes App-UI (Tabelle, Formular, Dokument-Vorschau,
+   Aufgaben-Karten, Statistik-Kacheln) statt Prosa. Datengetrieben aus SCREENS;
+   render()/history stützen Weiter/Zurück/Neustart. Eingaben sind Attrappe —
+   keine Validierung, keine Persistenz (statischer PoC). */
+
+/* ---- Render-Helfer ------------------------------------------------------ */
+
+const ro = (label, value) =>
+  `<div class="field"><span class="f-label">${label}</span><div class="ro-value">${value}</div></div>`;
+
+const field = (label, o = {}) => {
+  const { type = "text", value = "", ph = "", options, textarea, rows = 2 } = o;
+  let ctl;
+  if (options) ctl = `<select>${options.map((x) => `<option>${x}</option>`).join("")}</select>`;
+  else if (textarea) ctl = `<textarea rows="${rows}" placeholder="${ph}">${value}</textarea>`;
+  else ctl = `<input type="${type}" value="${value}" placeholder="${ph}">`;
+  return `<label class="field"><span class="f-label">${label}</span>${ctl}</label>`;
+};
+
+const section = (title, inner, cols = 2) =>
+  `<section class="fs"><h2 class="fs-title">${title}</h2><div class="grid cols-${cols}">${inner}</div></section>`;
+
+const pill = (text, kind) => `<span class="pill pill-${kind}">${text}</span>`;
+
+const task = (title, status, kind, checked) =>
+  `<div class="task"><label class="task-check"><input type="checkbox" ${checked ? "checked" : ""}>` +
+  `<span>${title}</span></label>${pill(status, kind)}</div>`;
+
+const tile = (label, value) =>
+  `<div class="tile"><div class="tile-val">${value}</div><div class="tile-label">${label}</div></div>`;
+
+const emailCard = (from, to, subject, body) =>
+  `<div class="email"><div class="email-head">` +
+  `<div><span class="e-k">Von</span> ${from}</div><div><span class="e-k">An</span> ${to}</div>` +
+  `<div class="e-subj">${subject}</div></div><div class="email-body">${body}</div></div>`;
+
+/* ---- Screens ------------------------------------------------------------ */
 
 const N = {
   frage:      (t) => ({ tag: "Frage",      cls: "tag-frage",      t }),
@@ -18,22 +52,36 @@ const SCREENS = {
   0: {
     step: 0, phase: "Einstieg", title: "Dashboard / Projektübersicht",
     body: `
-      <p>Übersicht offener Schulanfragen und laufender Projekte mit Status.</p>
-      <ul>
-        <li>GS Lindenhof — <em>neue Anfrage</em></li>
-        <li>OSG Hildesheim — <em>Terminfindung läuft</em></li>
-        <li>Gymnasium Nord — <em>Workshop terminiert</em></li>
-      </ul>`,
-    actions: [{ label: "Anfrage öffnen", to: 1, kind: "primary" }],
+      <p class="lead">Offene Schulanfragen und laufende Projekte.</p>
+      <table class="tbl">
+        <thead><tr><th>Schule</th><th>Ort</th><th>Klassen</th><th>Status</th><th>Eingang</th></tr></thead>
+        <tbody>
+          <tr class="row-active">
+            <td>GS Lindenhof</td><td>Hamburg</td><td>2</td>
+            <td>${pill("Neue Anfrage", "neu")}</td><td>11.07.2026</td></tr>
+          <tr><td>OSG Hildesheim</td><td>Hildesheim</td><td>4</td>
+            <td>${pill("Terminfindung", "wartet")}</td><td>28.06.2026</td></tr>
+          <tr><td>Gymnasium Nord</td><td>Kiel</td><td>3</td>
+            <td>${pill("Workshop terminiert", "ok")}</td><td>02.06.2026</td></tr>
+        </tbody>
+      </table>`,
+    actions: [{ label: "Anfrage GS Lindenhof öffnen", to: 1, kind: "primary" }],
   },
 
   1: {
     step: 1, phase: "A — Anfrage & Erstgespräch", title: "Schulanfrage eingegangen",
-    data: ["Stammdaten* (Name, PLZ, Ort)", "Ansprechperson (Name*, Position, E-Mail*, Telefon)",
-      "Projektplanung* (Anzahl Klassen, Jahrgangsstufen, flexibel/Wunschtermine, genehmigte Finanzierung)",
-      "ggf. Wunschtermine", "Bemerkungen"],
-    body: `<p>Die Schule hat über die Website eine Anfrage gestellt. Prüfung durch die PK
-      „zur Schonung unserer Ressourcen vor wenig interessierten Schulen“.</p>`,
+    body:
+      section("Stammdaten",
+        ro("Name der Schule", "GS Lindenhof") + ro("PLZ", "21077") + ro("Ort", "Hamburg")) +
+      section("Ansprechperson",
+        ro("Name", "Petra Meyer") + ro("Position", "Klassenleitung 7b") +
+        ro("E-Mail", "meyer@gs-lindenhof.de") + ro("Telefon", "040 123456")) +
+      section("Projektplanung",
+        ro("Anzahl Klassen", "2") + ro("Jahrgangsstufen", "7") +
+        ro("Terminwunsch", "Wunschtermine") + ro("Finanzierung genehmigt", pill("Ja", "ok"))) +
+      section("Weiteres",
+        ro("Wunschtermine", "KW 46–48 / 2026") +
+        ro("Bemerkungen", "Zwei Parallelklassen, gemeinsamer Elternabend gewünscht."), 1),
     actions: [
       { label: "Annehmen", to: 2, kind: "branch" },
       { label: "Ablehnen", to: "ende", kind: "branch" },
@@ -49,8 +97,16 @@ const SCREENS = {
 
   2: {
     step: 2, phase: "A — Anfrage & Erstgespräch", title: "Erstgespräch terminieren",
-    body: `<p>Automatische E-Mail (WordPress) mit Terminierungslink wurde versandt.
-      Status: <strong>wartet auf Buchung</strong>.</p>`,
+    body:
+      emailCard("koordination@zeichen-gegen-mobbing.de", "meyer@gs-lindenhof.de",
+        "Terminierung Ihres Erstgesprächs",
+        `<p>Guten Tag Frau Meyer,<br>bitte wählen Sie über den folgenden Link einen Termin
+         für Ihr Erstgespräch:</p><p><a class="fake-link">→ Termin buchen (WordPress)</a></p>`) +
+      `<div class="tracker">
+         <div class="tk done">✓ Anfrage angenommen</div>
+         <div class="tk done">✓ Automatische E-Mail versandt</div>
+         <div class="tk cur">● Wartet auf Buchung durch die Schule</div>
+       </div>`,
     actions: [
       { label: "Erstgespräch gebucht", to: 3, kind: "branch" },
       { label: "Nicht gebucht", to: "ende", kind: "branch" },
@@ -60,9 +116,18 @@ const SCREENS = {
 
   3: {
     step: 3, phase: "A — Anfrage & Erstgespräch", title: "Erstgespräch",
-    body: `<p>Termindetails wurden per E-Mail (Calendly) versandt. Video-Call mit der Schule;
-      die PK bereitet Finanzierungsvorschläge o. Ä. vor. Nach Durchführung geht es weiter zum Angebot.</p>`,
-    actions: [{ label: "Weiter", to: 4, kind: "primary" }],
+    body:
+      `<div class="meeting">
+         <div class="meeting-when"><span class="big">14. Juli 2026</span> · 10:00–10:30 Uhr</div>
+         <div class="meeting-row">Format: Video-Call (Calendly)</div>
+         <div class="meeting-row">Teilnehmende: P. Meyer · Projektkoordination</div>
+         <button class="btn btn-join" type="button" disabled>🎥 Call beitreten</button>
+       </div>` +
+      section("Vorbereitungsnotizen (PK)",
+        field("Finanzierungsvorschläge", { textarea: true,
+          value: "Stiftungsmittel + Eigenanteil 20 %", rows: 2 }) +
+        field("Interne Notiz", { textarea: true, ph: "Notizen zum Gespräch…", rows: 2 }), 1),
+    actions: [{ label: "Erstgespräch durchgeführt → Weiter", to: 4, kind: "primary" }],
     notes: [
       N.frage("Portal schon hier?"),
       N.besprechen("PK bereitet Erstgespräch vor (z. B. Finanzierungsvorschläge) ~15 Min."),
@@ -72,11 +137,20 @@ const SCREENS = {
   },
 
   4: {
-    step: 4, phase: "B — Angebot", title: "Angebotsdetails-Formular versenden",
-    data: ["Unterrichtszeiten", "Angaben zur Schule (Straße + Hausnr., Schulleitung, Schulform)",
-      "ggf. gesonderte Rechnungsadresse", "Angaben zum Schulträger (Anschrift)",
-      "bei Ablehnung: Hybrid ja/nein + Feedback"],
-    body: `<p>Formularlink (Calendly) an die Schule zur Erfassung der Angebotsdetails.</p>`,
+    step: 4, phase: "B — Angebot", title: "Angebotsdetails-Formular",
+    body:
+      `<p class="lead">Formular für die Schule zur Erfassung der Angebotsdetails.</p>` +
+      section("Unterricht",
+        field("Unterrichtszeiten", { value: "08:00–13:15" }) +
+        field("Hybrid möglich?", { options: ["Nein", "Ja"] })) +
+      section("Angaben zur Schule",
+        field("Straße + Hausnr.", { ph: "z. B. Lindenweg 4" }) +
+        field("Name der Schulleitung", { ph: "Vor- und Nachname" }) +
+        field("Schulform", { options: ["Grundschule", "Stadtteilschule", "Gymnasium", "Förderschule", "Berufsschule"] }) +
+        field("Rechnungsadresse abweichend?", { options: ["Nein", "Ja"] })) +
+      section("Rechnungs- & Trägerangaben",
+        field("Rechnungsadresse", { textarea: true, ph: "Nur falls abweichend…" }) +
+        field("Anschrift des Schulträgers", { textarea: true, ph: "Straße, PLZ, Ort" }), 1),
     actions: [
       { label: "Details erhalten", to: 5, kind: "branch" },
       { label: "Angebot abgelehnt", to: "ende", kind: "branch" },
@@ -90,9 +164,22 @@ const SCREENS = {
 
   5: {
     step: 5, phase: "B — Angebot", title: "Angebot erstellen & versenden",
-    body: `<p>Die PK stellt das Angebot zusammen und versendet es an die Schule
-      (Datenobjekt <strong>„Angebot“</strong>).</p>`,
-    actions: [{ label: "Weiter", to: 6, kind: "primary" }],
+    body:
+      `<div class="doc">
+        <div class="doc-head"><strong>Zeichen gegen Mobbing e.V.</strong>
+          <span>Angebot Nr. 2026-0142 · 14.07.2026</span></div>
+        <div class="doc-to">An: GS Lindenhof, Petra Meyer</div>
+        <table class="doc-tbl">
+          <thead><tr><th>Position</th><th class="r">Menge</th><th class="r">Einzel</th><th class="r">Summe</th></tr></thead>
+          <tbody>
+            <tr><td>Workshop-Durchführung (2 Klassen)</td><td class="r">2</td><td class="r">980,00 €</td><td class="r">1.960,00 €</td></tr>
+            <tr><td>Situationserfassung</td><td class="r">2</td><td class="r">180,00 €</td><td class="r">360,00 €</td></tr>
+            <tr><td>Material &amp; Vorbereitung</td><td class="r">1</td><td class="r">160,00 €</td><td class="r">160,00 €</td></tr>
+          </tbody>
+        </table>
+        <div class="doc-total">Gesamt: <strong>2.480,00 €</strong></div>
+      </div>`,
+    actions: [{ label: "Angebot versenden → Weiter", to: 6, kind: "primary" }],
     notes: [
       N.vorschlag("Hier einen KVA versenden statt Angebot."),
       N.vorschlag("Angebot und Dienstleistungsvertrag zusammenfassen?"),
@@ -102,14 +189,25 @@ const SCREENS = {
 
   6: {
     step: 6, phase: "B — Angebot", title: "Unterschriebenes Angebot",
-    body: `<p>Die Schule hat das Angebot geprüft, unterschrieben und zurückgesandt
-      (Datenobjekt <strong>„Unterschriebenes Angebot“</strong>). Eingang bei der PK bestätigt.</p>`,
+    body:
+      `<div class="doc">
+        <div class="doc-head"><strong>Angebot Nr. 2026-0142</strong>${pill("Unterschrieben", "ok")}</div>
+        <div class="doc-to">GS Lindenhof · Gesamt 2.480,00 €</div>
+        <div class="doc-sign">
+          <div class="sign-line">Petra Meyer<br><small>Schule, 14.07.2026</small></div>
+          <div class="sign-line sign-ok">✓ Eingang bei der PK bestätigt</div>
+        </div>
+      </div>`,
     actions: [{ label: "Weiter", to: 7, kind: "primary" }],
   },
 
   7: {
     step: 7, phase: "C — Terminfindung & SoVi-Matching", title: "Terminfindung",
-    body: `<p>Verzweigung je nachdem, ob die Schule Wunschtermine angegeben hat.</p>`,
+    body:
+      `<div class="decision">
+         <p>Hat die Schule Wunschtermine angegeben?</p>
+         ${ro("Terminwunsch (aus Anfrage)", "Wunschtermine: KW 46–48 / 2026")}
+       </div>`,
     actions: [
       { label: "Wunschtermine vorhanden", to: "7a", kind: "branch" },
       { label: "Keine Wunschtermine", to: 8, kind: "branch" },
@@ -119,14 +217,29 @@ const SCREENS = {
 
   "7a": {
     step: 7, phase: "C — Terminfindung & SoVi-Matching", title: "Grobe Terminabsprache",
-    body: `<p>Schule und PK stimmen grob mögliche Zeitfenster ab, bevor das SoVi-Matching startet.</p>`,
+    body:
+      section("Mögliche Zeitfenster abstimmen",
+        field("Zeitfenster 1", { type: "week" }) +
+        field("Zeitfenster 2", { type: "week" }) +
+        field("Priorität", { options: ["Vormittags", "Nachmittags", "Ganztägig"] }) +
+        field("Anmerkung", { ph: "z. B. keine Termine in Prüfungswochen" })),
     actions: [{ label: "Weiter", to: 8, kind: "primary" }],
   },
 
   8: {
     step: 8, phase: "C — Terminfindung & SoVi-Matching", title: "SoVi-Matching",
-    body: `<p>Persönliche Ansprache nach Zielregion oder Post in „Schulische Projekte“.
-      Social Visionaries sagen zu oder ab — teils mit Zeitverzug.</p>`,
+    body:
+      `<p class="lead">Persönliche Ansprache nach Zielregion / Post in „Schulische Projekte“.
+        SoVis sagen zu oder ab — teils mit Zeitverzug.</p>
+       <table class="tbl">
+         <thead><tr><th>Social Visionary</th><th>Region</th><th>Rückmeldung</th></tr></thead>
+         <tbody>
+           <tr><td>Jonas B.</td><td>Hamburg</td><td>${pill("Zugesagt", "ok")}</td></tr>
+           <tr><td>Aylin K.</td><td>Hamburg</td><td>${pill("Zugesagt", "ok")}</td></tr>
+           <tr><td>Marc T.</td><td>Lüneburg</td><td>${pill("Abgesagt", "no")}</td></tr>
+           <tr><td>Sina R.</td><td>Hamburg</td><td>${pill("Offen", "wartet")}</td></tr>
+         </tbody>
+       </table>`,
     actions: [{ label: "Weiter", to: 9, kind: "primary" }],
     notes: [
       N.idee("Alte Abfrage der SoVis prüfen."),
@@ -136,17 +249,37 @@ const SCREENS = {
 
   9: {
     step: 9, phase: "C — Terminfindung & SoVi-Matching", title: "Termine bestätigen",
-    body: `<p>Die PK meldet der Schule <strong>vorgeschlagene Termine</strong> zurück;
-      die Schule bestätigt sie verbindlich (Datenobjekt <strong>„Verbindliche Termine“</strong>).</p>`,
+    body:
+      `<p class="lead">Vorgeschlagene Termine an die Schule — die Schule bestätigt verbindlich.</p>
+       <div class="opts">
+         <label class="opt"><input type="checkbox" checked> Di, 10.11.2026 · 08:00–13:00 · Klasse 7a</label>
+         <label class="opt"><input type="checkbox" checked> Mi, 11.11.2026 · 08:00–13:00 · Klasse 7b</label>
+         <label class="opt"><input type="checkbox"> Do, 12.11.2026 · Ausweichtermin</label>
+       </div>` +
+      section("Ergebnis", ro("Status", pill("Verbindlich bestätigt", "ok")), 1),
     actions: [{ label: "Weiter", to: 10, kind: "primary" }],
   },
 
   10: {
-    step: 10, phase: "D — Vertrag & Klassenplanung", title: "Vertrag & Klassenplanung (parallel)",
-    parallel: ["Dienstleistungsvertrag versenden (inkl. Hinweis Kinderschutzkonzept, Erklärung für Lehrkräfte)",
-      "Link zum Formular Klassenplanung versenden"],
-    body: `<p>Zwei Aktionen laufen gleichzeitig. Die Schule füllt die Klassenplanung aus
-      (Klassenbezeichnung, Name + E-Mail der Klassenleitung).</p>`,
+    step: 10, phase: "D — Vertrag & Klassenplanung", title: "Vertrag & Klassenplanung",
+    body:
+      `<div class="parallel-note">Zwei Aktionen laufen parallel:</div>
+       <div class="two-col">
+         <div class="doc doc-sm">
+           <div class="doc-head"><strong>Dienstleistungsvertrag</strong>${pill("Versendet", "ok")}</div>
+           <ul class="doc-list">
+             <li>Vertragsdokument</li>
+             <li>Hinweis Kinderschutzkonzept</li>
+             <li>Erklärung für Lehrkräfte</li>
+           </ul>
+         </div>
+         <div class="form-col">
+           ${section("Formular Klassenplanung (Schule)",
+             field("Klassenbezeichnung", { value: "7a" }) +
+             field("Klassenleitung – Name", { ph: "Vor- und Nachname" }) +
+             field("Klassenleitung – E-Mail", { type: "email", ph: "name@schule.de" }), 1)}
+         </div>
+       </div>`,
     actions: [{ label: "Weiter", to: 11, kind: "primary" }],
     notes: [
       N.frage("Reihenfolge Vertrag / Klassenplanung — oder erst hier?"),
@@ -158,10 +291,17 @@ const SCREENS = {
 
   11: {
     step: 11, phase: "E — Projektstart & SoVi-Buchung", title: "Projektstart",
-    body: `<p>„Start des Projekt“-Mail an die Klassenleitungen (Einverständniserklärungen,
-      Erklärung für Lehrkräfte, Test- und Umfragelink der Klasse). Anschließend automatischer
-      Versand der Mail zur Buchung der Situationserfassung (Calendly).</p>
-      <p>Inklusive Verzweigung nach SoVi-Buchungstool:</p>`,
+    body:
+      emailCard("koordination@zeichen-gegen-mobbing.de", "Klassenleitungen 7a, 7b",
+        "Start des Projekts",
+        `<p>Der Link enthält:</p>
+         <ul class="doc-list">
+           <li>Einverständniserklärungen Eltern &amp; Erziehungsberechtigte</li>
+           <li>Erklärung für Lehrkräfte</li>
+           <li>Test-Umfrage &amp; Umfragelink der Klasse</li>
+         </ul>`) +
+      `<div class="tracker"><div class="tk done">✓ Situationserfassungs-Mail (Calendly) automatisch versandt</div></div>
+       <p class="lead">SoVi-Buchungstool vorhanden?</p>`,
     actions: [
       { label: "SoVi mit Buchungstool → Workshop buchen", to: 12, kind: "branch" },
       { label: "SoVi ohne Buchungstool → SoVis informieren", to: 12, kind: "branch" },
@@ -177,63 +317,103 @@ const SCREENS = {
 
   12: {
     step: 12, phase: "E — Projektstart & SoVi-Buchung", title: "Klassenleitung-Aufgaben (parallel)",
-    parallel: ["Einverständniserklärungen der Eltern unterschreiben lassen",
-      "Erklärung für Lehrkräfte unterschreiben", "Umfrage planen und durchführen",
-      "Situationserfassung buchen"],
-    body: `<p>Übersicht der parallelen Aufgaben der Klassenleitung. Parallel dazu:
-      SoVis werten die Umfrage aus.</p>`,
+    body:
+      `<p class="lead">Parallele Aufgaben der Klassenleitung:</p>
+       <div class="tasks">
+         ${task("Einverständniserklärungen der Eltern unterschreiben lassen", "In Arbeit", "wartet", false)}
+         ${task("Erklärung für Lehrkräfte unterschreiben", "Erledigt", "ok", true)}
+         ${task("Umfrage planen und durchführen", "Offen", "neu", false)}
+         ${task("Situationserfassung buchen", "Offen", "neu", false)}
+       </div>
+       <div class="tracker"><div class="tk cur">● Parallel: SoVis werten die Umfrage aus</div></div>`,
     actions: [{ label: "Weiter", to: 13, kind: "primary" }],
     notes: [ N.vorschlag("Details zur Klassenplanung aus der Mail streichen.") ],
   },
 
   13: {
     step: 13, phase: "F — Vorbereitung & Situationserfassung", title: "Vorbereitung & Situationserfassung",
-    body: `<p>PK legt die Erklärung für Lehrkräfte ab und bucht ggf. Unterkünfte (Reiseprojekt).
-      Die Klassenleitung führt die Situationserfassung durch. Bei gemeinsamem Elternabend
-      koordiniert die PK die Planung und verschickt die Einladung an die Lehrkräfte.</p>`,
+    body:
+      `<div class="tasks">
+         ${task("Erklärung für Lehrkräfte ablegen (PK)", "Erledigt", "ok", true)}
+         ${task("Unterkünfte buchen (nur Reiseprojekt)", "Nicht nötig", "neu", false)}
+         ${task("Situationserfassung durchführen (Klassenleitung)", "Geplant", "wartet", false)}
+         ${task("Elternabend koordinieren (gemeinsamer Elternabend)", "In Arbeit", "wartet", false)}
+         ${task("Einladung Elternabend an Lehrkräfte versenden", "Offen", "neu", false)}
+       </div>`,
     actions: [{ label: "Weiter zum Workshop", to: 14, kind: "primary" }],
     notes: [ N.idee("Zoom teilweise für die Situationserfassung.") ],
   },
 
   14: {
-    step: 14, phase: "🏁 Meilenstein", title: "🏁 Workshop-Meilenstein",
-    body: `<p>Der eigentliche Anti-Mobbing-<strong>Workshop</strong> findet statt.</p>`,
+    step: 14, phase: "🏁 Meilenstein", title: "Workshop-Meilenstein",
+    body:
+      `<div class="milestone">
+         <div class="ms-flag">🏁</div>
+         <div class="ms-title">WORKSHOP</div>
+         <div class="ms-sub">Der Anti-Mobbing-Workshop findet statt · 10.–11.11.2026 · GS Lindenhof</div>
+       </div>`,
     actions: [{ label: "Weiter zur Nachbereitung", to: 15, kind: "primary" }],
   },
 
   15: {
     step: 15, phase: "G — Nachbereitung & Feedback", title: "Feedback & Nachbereitung",
-    body: `<p>Feedback-Umfrage (Calendly/manuell) versenden, SoVis an den Reflexionsfragebogen
-      erinnern. Feedback auswerten und an SoVis / P&amp;C / PsyPäd weitergeben sowie mit der Presse teilen.</p>`,
+    body:
+      `<div class="tasks">
+         ${task("Feedback-Umfrage versenden (Calendly/manuell)", "Versendet", "ok", true)}
+         ${task("SoVis an Reflexionsfragebogen erinnern", "Erledigt", "ok", true)}
+         ${task("Feedback auswerten → SoVis / P&C / PsyPäd", "In Arbeit", "wartet", false)}
+         ${task("Feedback mit Presse teilen", "Offen", "neu", false)}
+       </div>`,
     actions: [{ label: "Weiter", to: 16, kind: "primary" }],
   },
 
   16: {
     step: 16, phase: "G — Nachbereitung & Feedback", title: "Abrechnung",
-    body: `<p>Rechnungsentwurf an Marek senden → Marek versendet die Rechnung über
-      <code>rechnung@</code> (Buchhaltung). Anträge von SoVis bearbeiten.</p>`,
+    body:
+      `<div class="doc doc-sm">
+         <div class="doc-head"><strong>Rechnungsentwurf → Marek</strong>${pill("Entwurf", "wartet")}</div>
+         <div class="doc-to">GS Lindenhof · Rechnungssumme 2.480,00 €</div>
+         <div class="doc-row">Versand über <code>rechnung@</code> (Buchhaltung)</div>
+       </div>
+       <div class="tasks">
+         ${task("Rechnungsentwurf an Marek senden", "Erledigt", "ok", true)}
+         ${task("Anträge von SoVis bearbeiten (Reisekosten etc.)", "In Arbeit", "wartet", false)}
+       </div>`,
     actions: [{ label: "Weiter", to: 17, kind: "primary" }],
     notes: [ N.idee("Warum prüft Marek?") ],
   },
 
   17: {
     step: 17, phase: "G — Nachbereitung & Feedback", title: "Abschluss",
-    data: ["Anzahl Klassen / SuS", "Aufwendungen Reisekosten / Unterkunft", "Rechnungssumme",
-      "Welche SoVis?", "Gefahrene KM"],
-    body: `<p>Nach 10 Wochen wird manuell die <strong>Vergleichsumfrage</strong> verschickt und
-      die Ergebnisse an die Lehrkraft gesendet. Statistische Daten werden über den gesamten
-      Prozess gesammelt:</p>`,
+    body:
+      `<div class="tracker">
+         <div class="tk done">✓ Nach 10 Wochen: Vergleichsumfrage versendet</div>
+         <div class="tk done">✓ Ergebnisse an die Lehrkraft gesendet</div>
+       </div>
+       <h2 class="fs-title">Statistische Daten</h2>
+       <div class="tiles">
+         ${tile("Klassen / SuS", "2 / 48")}
+         ${tile("Reisekosten / Unterkunft", "0,00 €")}
+         ${tile("Rechnungssumme", "2.480,00 €")}
+         ${tile("Eingesetzte SoVis", "2")}
+         ${tile("Gefahrene KM", "64")}
+       </div>`,
     terminal: "abschluss",
     notes: [ N.besprechen("Vergleichsumfrage fällt in den „heißen Zeitraum“ des Schulalltags — unschön.") ],
   },
 
   ende: {
     step: null, phase: "Prozessende", title: "Prozess beendet",
-    body: `<p>Die Anfrage wurde <strong>abgelehnt bzw. nicht weiterverfolgt</strong>.
-      Dies ist ein vorzeitiges Ende — kein regulärer Projektabschluss.</p>`,
+    body:
+      `<div class="terminal-box">
+         <p>Die Anfrage wurde <strong>abgelehnt bzw. nicht weiterverfolgt</strong>.</p>
+         <p>Dies ist ein vorzeitiges Ende — kein regulärer Projektabschluss.</p>
+       </div>`,
     terminal: "ende",
   },
 };
+
+/* ---- Renderer ----------------------------------------------------------- */
 
 const TOTAL = 18; // Screens 0–17
 let currentId = 0;
@@ -242,9 +422,7 @@ const history = [];
 const stage = document.getElementById("stage");
 const progressEl = document.getElementById("progress");
 
-function tag(n) {
-  return `<span class="tag ${n.cls}">${n.tag}</span>${n.t}`;
-}
+const tag = (n) => `<span class="tag ${n.cls}">${n.tag}</span>${n.t}`;
 
 function render(id) {
   const s = SCREENS[id];
@@ -267,19 +445,7 @@ function render(id) {
     html += `<div class="terminal-banner ${s.terminal}">${label}</div>`;
   }
 
-  html += `<div class="body">${s.body}`;
-
-  if (s.data) {
-    html += `<div class="datafields"><div class="label">Erfasste Daten</div><ul>` +
-      s.data.map((d) => `<li>${d}</li>`).join("") + `</ul></div>`;
-  }
-  if (s.parallel) {
-    html += `<div class="parallel"><div class="label">Parallele Aufgaben</div>` +
-      `<div class="parallel-grid">` +
-      s.parallel.map((p) => `<div class="parallel-item">${p}</div>`).join("") +
-      `</div></div>`;
-  }
-  html += `</div>`;
+  html += `<div class="body">${s.body}</div>`;
 
   if (s.notes && s.notes.length) {
     html += `<details class="notes"><summary><span class="ico">i</span>` +
@@ -287,7 +453,6 @@ function render(id) {
       s.notes.map((n) => `<li>${tag(n)}</li>`).join("") + `</ul></details>`;
   }
 
-  // Actions
   html += `<div class="actions">`;
   html += `<button class="btn btn-back" type="button" data-back ${history.length ? "" : "disabled"}>← Zurück</button>`;
   if (s.actions) {
