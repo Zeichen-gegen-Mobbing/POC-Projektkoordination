@@ -355,7 +355,7 @@ const SCREENS = {
   },
 
   12: {
-    step: 12, phase: "E — Projektstart & SoVi-Buchung", title: "Klassenleitung-Aufgaben (parallel)",
+    step: 12, phase: "E — Projektstart & SoVi-Buchung", title: "Klassenleitung-Aufgaben (parallel)", owner: "other:Klassenleitung",
     body:
       `<p class="lead">Parallele Aufgaben der Klassenleitung:</p>
        <div class="tasks">
@@ -384,7 +384,7 @@ const SCREENS = {
   },
 
   14: {
-    step: 14, phase: "🏁 Meilenstein", title: "Workshop-Meilenstein",
+    step: 14, phase: "🏁 Meilenstein", title: "Workshop-Meilenstein", owner: "system",
     body:
       `<div class="milestone">
          <div class="ms-flag">🏁</div>
