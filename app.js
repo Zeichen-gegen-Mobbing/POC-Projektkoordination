@@ -737,7 +737,8 @@ function render(id) {
   html += `<button class="btn btn-back" type="button" data-back ${history.length ? "" : "disabled"}>← Zurück</button>`;
   if (s.actions) {
     for (const a of s.actions) {
-      const cls = a.kind === "branch" ? "btn-branch" : "btn-primary";
+      // Orange = eigene Aktion der Rolle; Blau = Aktion einer anderen Rolle/System.
+      const cls = foreign ? "btn-branch" : "btn-primary";
       html += `<button class="btn ${cls}" type="button" data-to="${a.to}">${a.label}</button>`;
     }
   }
