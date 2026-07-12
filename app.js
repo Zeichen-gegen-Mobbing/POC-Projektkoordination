@@ -42,6 +42,15 @@ const emailCard = (from, to, subject, body) =>
   `<div><span class="e-k">Von</span> ${from}</div><div><span class="e-k">An</span> ${to}</div>` +
   `<div class="e-subj">${subject}</div></div><div class="email-body">${body}</div></div>`;
 
+/* owner: 'self' | 'other:<Rolle>' | 'system' — wer den Screen wirklich bedient.
+   Fehlt das Feld, gilt 'self' (eigene, bedienbare Aktion der aktiven Rolle). */
+const ownerChip = (owner) => {
+  if (owner === "system") return `<span class="owner-chip owner-foreign">⚙ Automatisch (System)</span>`;
+  if (owner.startsWith("other:"))
+    return `<span class="owner-chip owner-foreign">Wird erledigt von: ${owner.slice(6)}</span>`;
+  return `<span class="owner-chip owner-self">● Ihre Aktion</span>`;
+};
+
 const N = {
   frage:      (t) => ({ tag: "Frage",      cls: "tag-frage",      t }),
   idee:       (t) => ({ tag: "Idee",       cls: "tag-idee",       t }),
@@ -176,7 +185,7 @@ const SCREENS = {
   },
 
   2: {
-    step: 2, phase: "A — Anfrage & Erstgespräch", title: "Erstgespräch terminieren",
+    step: 2, phase: "A — Anfrage & Erstgespräch", title: "Erstgespräch terminieren", owner: "other:Schule",
     body:
       emailCard("koordination@zeichen-gegen-mobbing.de", "meyer@gs-lindenhof.de",
         "Terminierung Ihres Erstgesprächs",
@@ -217,7 +226,7 @@ const SCREENS = {
   },
 
   4: {
-    step: 4, phase: "B — Angebot", title: "Angebotsdetails-Formular",
+    step: 4, phase: "B — Angebot", title: "Angebotsdetails-Formular", owner: "other:Schule",
     body: bodyAngebotForm,
     actions: [
       { label: "Details erhalten", to: 5, kind: "branch" },
@@ -242,7 +251,7 @@ const SCREENS = {
   },
 
   6: {
-    step: 6, phase: "B — Angebot", title: "Unterschriebenes Angebot",
+    step: 6, phase: "B — Angebot", title: "Unterschriebenes Angebot", owner: "other:Schule",
     body:
       `<div class="doc">
         <div class="doc-head"><strong>Angebot Nr. 2026-0142</strong>${pill("Unterschrieben", "ok")}</div>
@@ -302,7 +311,7 @@ const SCREENS = {
   },
 
   9: {
-    step: 9, phase: "C — Terminfindung & SoVi-Matching", title: "Termine bestätigen",
+    step: 9, phase: "C — Terminfindung & SoVi-Matching", title: "Termine bestätigen", owner: "other:Schule",
     body: bodyTermine,
     actions: [{ label: "Weiter", to: 10, kind: "primary" }],
   },
@@ -485,12 +494,27 @@ const SCREENS = {
   s_angebotform: {
     role: "schule", phase: "Schule · Angebot", title: "Angebotsdetails ausfüllen",
     body: bodyAngebotForm,
-    actions: [{ label: "Formular absenden → Weiter", to: "s_angebotpruef", kind: "primary" }],
+    actions: [{ label: "Formular absenden → Weiter", to: "s_angebotwait", kind: "primary" }],
+  },
+
+  s_angebotwait: {
+    role: "schule", phase: "Schule · Angebot", title: "Angebot wird erstellt", owner: "other:Projektkoordination",
+    body:
+      `<p class="lead">Ihre Angebotsdetails sind eingegangen. Die Projektkoordination erstellt nun
+        auf dieser Grundlage Ihr individuelles Angebot — für Sie ist hier nichts zu tun.</p>` +
+      `<div class="tracker">
+         <div class="tk done">✓ Angebotsdetails übermittelt</div>
+         <div class="tk cur">● Projektkoordination erstellt das Angebot</div>
+         <div class="tk">Danach: Angebot zur Prüfung an Sie</div>
+       </div>`,
+    actions: [{ label: "Angebot von PK erhalten → zur Prüfung", to: "s_angebotpruef", kind: "primary" }],
   },
 
   s_angebotpruef: {
     role: "schule", phase: "Schule · Angebot", title: "Angebot prüfen und unterschreiben",
     body:
+      `<p class="lead">Dieses Angebot wurde von der <strong>Projektkoordination</strong> erstellt.
+        Bitte prüfen und unterschreiben.</p>` +
       bodyAngebotQuote +
       `<label class="opt" style="margin-top:12px"><input type="checkbox"> Ich habe das Angebot geprüft und stimme zu.</label>`,
     actions: [{ label: "✍ Prüfen & Unterschreiben → Weiter", to: "s_termine", kind: "primary" }],
@@ -578,7 +602,7 @@ const SCREENS = {
   /* ===== Klassenleitung ================================================= */
 
   kl_mail: {
-    role: "kl", phase: "Klassenleitung · Projektstart", title: "Projektstart-Mail erhalten",
+    role: "kl", phase: "Klassenleitung · Projektstart", title: "Projektstart-Mail erhalten", owner: "system",
     body:
       emailCard("koordination@zeichen-gegen-mobbing.de", "Sie (Klassenleitung 7a)",
         "Start des Projekts — Ihre Aufgaben",
@@ -635,7 +659,7 @@ const SCREENS = {
   },
 
   kl_ergebnis: {
-    role: "kl", phase: "Klassenleitung · Abschluss", title: "Ergebnisse einsehen",
+    role: "kl", phase: "Klassenleitung · Abschluss", title: "Ergebnisse einsehen", owner: "system",
     body:
       `<div class="tracker"><div class="tk done">✓ Vergleichsumfrage nach 10 Wochen abgeschlossen</div></div>
        <h2 class="fs-title">Ergebnisse Ihrer Klasse</h2>
@@ -653,7 +677,7 @@ const SCREENS = {
 
 const FLOWS = {
   pk: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17],
-  schule: ["s_anfrage", "s_erstgespraech", "s_angebotform", "s_angebotpruef", "s_termine", "s_vertrag"],
+  schule: ["s_anfrage", "s_erstgespraech", "s_angebotform", "s_angebotwait", "s_angebotpruef", "s_termine", "s_vertrag"],
   sovi: ["sv_matching", "sv_situ", "sv_umfrage", "sv_reflexion", "sv_antrag"],
   kl: ["kl_mail", "kl_aufgaben", "kl_situ", "kl_elternabend", "kl_ergebnis"],
 };
@@ -686,8 +710,12 @@ function render(id) {
   else if (typeof id === "number") badge = `<span class="screen-no${terminalCls}">Screen ${id}</span>`;
   else badge = "";
 
-  let html = `<article class="card">
-    <div class="phase">${s.phase}</div>
+  const owner = s.owner || "self";
+  const foreign = owner !== "self";
+  const chip = (id === "home" || s.terminal) ? "" : ownerChip(owner);
+
+  let html = `<article class="card${foreign ? " card-muted" : ""}">
+    <div class="phase"><span>${s.phase}</span>${chip}</div>
     <h1>${badge}${s.title}</h1>`;
 
   if (s.terminal) {

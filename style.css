@@ -57,12 +57,38 @@ body {
 }
 
 .phase {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
   font-size: 12px;
   letter-spacing: .04em;
   text-transform: uppercase;
   color: var(--muted);
   margin-bottom: 4px;
 }
+
+/* Rollen-Zuständigkeit pro Screen */
+.owner-chip {
+  text-transform: none;
+  letter-spacing: 0;
+  font-size: 12px;
+  font-weight: 600;
+  padding: 3px 10px;
+  border-radius: 999px;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+.owner-self { background: #e2f4ea; color: #1c6b3f; }
+.owner-foreign { background: #eceff3; color: var(--muted); border: 1px dashed #c3cad4; }
+
+/* Fremde/automatische Screens optisch zurücknehmen */
+.card-muted { background: #f7f8fa; }
+.card-muted .body { opacity: .72; }
+.card-muted .body input,
+.card-muted .body select,
+.card-muted .body textarea,
+.card-muted .body .btn-mini { pointer-events: none; }
 .card h1 {
   font-size: 22px;
   margin: 0 0 6px;
